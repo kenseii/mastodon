@@ -44,8 +44,11 @@ class ResolveRemoteAccountService < BaseService
       if lock.acquired?
         @account = Account.find_remote(@username, @domain)
 
-        if activitypub_ready?
+        if activitypub_ready? && @account&.activitypub?
           handle_activitypub
+        elsif activitypub_ready?
+          handle_activitypub
+          handle_protocol_upgrade
         else
           handle_ostatus
         end
@@ -99,6 +102,10 @@ class ResolveRemoteAccountService < BaseService
     @account = ActivityPub::ProcessAccountService.new.call(@username, @domain, actor_json)
   rescue Oj::ParseError
     nil
+  end
+
+  def handle_protocol_upgrade
+    ActivityPub::PostUpgradeWorker.perform_async(@account.id)
   end
 
   def create_account
